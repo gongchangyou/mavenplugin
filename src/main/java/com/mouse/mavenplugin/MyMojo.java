@@ -7,8 +7,15 @@ import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.project.MavenProject;
 
 import java.io.File;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.List;
 
 /**
@@ -51,6 +58,12 @@ public class MyMojo extends AbstractMojo {
     @Parameter(property = "lists", readonly = true)
     private List lists;
 
+    /**
+     * Dependency injected
+     */
+    @Parameter(defaultValue = "${project}")
+    public MavenProject project;
+
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         getLog().info("*******************ShowProjectInfo*******************");
@@ -61,7 +74,43 @@ public class MyMojo extends AbstractMojo {
         System.out.println("项目版本version:" + this.version);
         System.out.println("项目作者author:" + author);
         System.out.println("项目包含文件类型lists：" + StringUtils.join(lists.toArray(), ","));
+        try {
+            Class clazz = getClassLoader(project).loadClass("com.mouse.mavenplugin.Model");
+            Field[] fields = clazz.getDeclaredFields();
+            for (Field f : fields) {
+                getLog().info("Field=" + f.getName() + "isPrivate=" + Modifier.isPrivate(f.getModifiers()));
+            }
+            Method[] methods = clazz.getDeclaredMethods();
+            for (Method m : methods) {
+                getLog().info("method=" + m.getName() + "isPrivate=" + Modifier.isPrivate(m.getModifiers()));
+            }
+            getLog().info("class=" + clazz);
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+
         getLog().info("--------------------MyFirstMojo,end-----------------------");
+    }
+
+    private ClassLoader getClassLoader(MavenProject project)
+    {
+        try
+        {
+            List classpathElements = project.getCompileClasspathElements();
+            classpathElements.add( project.getBuild().getOutputDirectory() );
+            classpathElements.add( project.getBuild().getTestOutputDirectory() );
+            URL urls[] = new URL[classpathElements.size()];
+            for ( int i = 0; i < classpathElements.size(); ++i )
+            {
+                urls[i] = new File( (String) classpathElements.get( i ) ).toURL();
+            }
+            return new URLClassLoader( urls, this.getClass().getClassLoader() );
+        }
+        catch ( Exception e )
+        {
+            getLog().debug( "Couldn't get the classloader." );
+            return this.getClass().getClassLoader();
+        }
     }
 }
  
