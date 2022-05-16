@@ -17,6 +17,7 @@ import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * @author yyzsx
@@ -74,20 +75,29 @@ public class MyMojo extends AbstractMojo {
         System.out.println("项目版本version:" + this.version);
         System.out.println("项目作者author:" + author);
         System.out.println("项目包含文件类型lists：" + StringUtils.join(lists.toArray(), ","));
-        try {
-            Class clazz = getClassLoader(project).loadClass("com.mouse.mavenplugin.Model");
-            Field[] fields = clazz.getDeclaredFields();
-            for (Field f : fields) {
-                getLog().info("Field=" + f.getName() + "isPrivate=" + Modifier.isPrivate(f.getModifiers()));
+        // recursive read files in basedir
+        listFilesForFolder(new File(basedir.getPath() + "/target/classes"), (file) -> {
+            System.out.println(file.getName());
+            if (file.getPath().contains(".class")) {
+                String className = file.getPath().replaceFirst(".*com", "com").replaceFirst(".class", "").replace("/", ".");
+                getLog().info("className="+ className);
+                try {
+                    Class clazz = getClassLoader(project).loadClass(className);
+                    Field[] fields = clazz.getDeclaredFields();
+                    for (Field f : fields) {
+                        getLog().info("Field=" + f.getName() + "isPrivate=" + Modifier.isPrivate(f.getModifiers()));
+                    }
+                    Method[] methods = clazz.getDeclaredMethods();
+                    for (Method m : methods) {
+                        getLog().info("method=" + m.getName() + "isPrivate=" + Modifier.isPrivate(m.getModifiers()));
+                    }
+                    getLog().info("class=" + clazz);
+                } catch (ClassNotFoundException e) {
+                    e.printStackTrace();
+                }
             }
-            Method[] methods = clazz.getDeclaredMethods();
-            for (Method m : methods) {
-                getLog().info("method=" + m.getName() + "isPrivate=" + Modifier.isPrivate(m.getModifiers()));
-            }
-            getLog().info("class=" + clazz);
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-        }
+            return "";
+        });
 
         getLog().info("--------------------MyFirstMojo,end-----------------------");
     }
@@ -110,6 +120,17 @@ public class MyMojo extends AbstractMojo {
         {
             getLog().debug( "Couldn't get the classloader." );
             return this.getClass().getClassLoader();
+        }
+    }
+
+    public void listFilesForFolder(final File folder, Function<File, String> function) {
+        for (final File fileEntry : folder.listFiles()) {
+            if (fileEntry.isDirectory()) {
+                listFilesForFolder(fileEntry, function);
+            } else {
+                System.out.println(fileEntry.getName());
+                function.apply(fileEntry);
+            }
         }
     }
 }
